@@ -50,10 +50,10 @@ elif menu == "🎯 Prediction":
 
     # --- Load model & data ---
     try:
-        model = joblib.load('optimized_catboost_model.pkl')
+        model = joblib.load('Final_optimized_catboost_model.pkl')
         df = pd.read_excel('NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx')
     except FileNotFoundError:
-        st.error("❌ Missing files. Ensure both 'optimized_catboost_model.pkl' and 'NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx' exist.")
+        st.error("❌ Missing files. Ensure both 'Final_optimized_catboost_model.pkl' and 'NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx' exist.")
         st.stop()
 
     # --- Safe feature list handling ---
