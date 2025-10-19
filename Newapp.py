@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import altair as alt
+
 
 # ------------------------------
 # Page Config & Header
@@ -26,41 +26,46 @@ st.title("📘 Student Final Math Score Prediction - Ghanaian Junior High School
 # ------------------------------
 if menu == "🏠 Home":
     st.markdown("<h2 style='text-align:center; color:skyblue;'>🌟 Welcome to the Student Final Math Score Prediction App 🌟</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>Let's explore how Machine Learning can help you understand and improve student performance.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:white;'>Let's explore how Machine Learning can help you understand and improve student performance.</p>", unsafe_allow_html=True)
+    
     st.image("https://cdn-icons-png.flaticon.com/512/3135/3135755.png", width=180)
+    
     st.markdown("""
     ### 💡 What You Can Do Here
     - Predict final math scores using real student data  
     - Identify at-risk students early  
-    - Explore how academic factors influence outcomes  
+    - Explore how various academic factors influence outcomes  
     - Download results for further analysis  
     """)
+
     st.success("👉 Use the sidebar to go to **Prediction** or **About App** sections.")
 
 # ------------------------------
 # Prediction Section
 # ------------------------------
 elif menu == "🎯 Prediction":
+    # --- Sidebar Settings ---
     st.sidebar.header("🧮 Prediction Settings")
     mode = st.sidebar.radio("Select Input Mode", ["One Variable per Student", "All Variables per Student"])
-    n_students = st.sidebar.number_input("Input number of students to predict for", min_value=1, max_value=100, value=1, step=1)
+    n_students = st.sidebar.number_input("Input the Number of Students you want to predict for", min_value=1, max_value=100, value=1, step=1)
 
-    # --- Load model and dataset ---
+    # --- Load model & data ---
+    
     try:
-        model = joblib.load('catboost_model.pkl')
+        model = joblib.load('optimized_catboost_model.pkl')
         df = pd.read_excel('NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx')
     except FileNotFoundError:
-        st.error("❌ Model or data file not found. Please upload 'catboost_model.pkl' and the dataset.")
+        st.error("❌ Model or data file not found. Ensure both 'catboost_model.pkl' and 'NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx' exist in this directory.")
         st.stop()
 
-    # --- Feature name check ---
-    if hasattr(model, "feature_names_") and model.feature_names_:
-        feature_names = model.feature_names_
-    else:
-        st.warning("⚠️ Model feature names not found — using dataset column names.")
+    try:
+        feature_names = getattr(model, "feature_names_", None)
+        if not feature_names:
+            feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
+    except Exception:
         feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
 
-    # --- Feature mapping ---
+    # --- Feature Mapping ---
     features = {
         "1": "Age",
         "2": "Hours of studies per week",
@@ -70,7 +75,7 @@ elif menu == "🎯 Prediction":
         "6": "Class participation"
     }
 
-    # --- Collect Student Data ---
+    # --- Data Collection Function ---
     def collect_student_data(n_students, all_vars=False):
         students = []
         for i in range(n_students):
@@ -86,27 +91,28 @@ elif menu == "🎯 Prediction":
                 if selected_feature == "Class participation":
                     student[selected_feature] = st.selectbox("Class participation", ["Low", "Moderate", "High"], key=f"part_{i}")
                 elif selected_feature == "Age":
-                    student[selected_feature] = st.number_input("Age", 5, 25, step=1, key=f"age_{i}")
+                    student[selected_feature] = st.number_input("Age", min_value=5, max_value=25, step=1, key=f"age_{i}")
                 elif selected_feature in ["Homework completion (20%)", "Class Assessment Task (20%)"]:
-                    student[selected_feature] = st.number_input(f"{selected_feature} (0–20)", 0.0, 20.0, step=0.1, key=f"{selected_feature}_{i}")
+                    student[selected_feature] = st.number_input(f"{selected_feature} (0–20)", min_value=0.0, max_value=20.0, step=0.1, key=f"{selected_feature}_{i}")
                 elif selected_feature == "Attendance":
-                    student[selected_feature] = st.number_input("Attendance (10+)", 10, step=1, key=f"att_{i}")
+                    student[selected_feature] = st.number_input("Attendance (10 and above)", min_value=10, step=1, key=f"att_{i}")
                 elif selected_feature == "Hours of studies per week":
-                    student[selected_feature] = st.number_input("Hours of studies per week", 0.0, step=0.1, key=f"hours_{i}")
+                    student[selected_feature] = st.number_input("Hours of studies per week", min_value=0.0, step=0.1, key=f"hours_{i}")
             else:
-                student["Age"] = st.number_input("Age", 5, 25, step=1, key=f"age_{i}")
-                student["Hours of studies per week"] = st.number_input("Hours of studies per week", 0.0, step=0.1, key=f"hours_{i}")
-                student["Attendance"] = st.number_input("Attendance (10+)", 10, step=1, key=f"att_{i}")
-                student["Homework completion (20%)"] = st.number_input("Homework completion (0–20)", 0.0, 20.0, step=0.1, key=f"home_{i}")
-                student["Class Assessment Task (20%)"] = st.number_input("Class Assessment Task (0–20)", 0.0, 20.0, step=0.1, key=f"assess_{i}")
+                student["Age"] = st.number_input("Age", min_value=5, max_value=25, step=1, key=f"age_{i}")
+                student["Hours of studies per week"] = st.number_input("Hours of studies per week", min_value=0.0, step=0.1, key=f"hours_{i}")
+                student["Attendance"] = st.number_input("Attendance (10 and above)", min_value=10, step=1, key=f"att_{i}")
+                student["Homework completion (20%)"] = st.number_input("Homework completion (0–20)", min_value=0.0, max_value=20.0, step=0.1, key=f"home_{i}")
+                student["Class Assessment Task (20%)"] = st.number_input("Class Assessment Task (0–20)", min_value=0.0, max_value=20.0, step=0.1, key=f"assess_{i}")
                 student["Class participation"] = st.selectbox("Class participation", ["Low", "Moderate", "High"], key=f"part_{i}")
+            
             students.append(student)
         return students
 
     # --- Collect Data ---
     student_data = collect_student_data(int(n_students), all_vars=(mode == "All Variables per Student"))
 
-    # --- Prediction Logic ---
+    # --- Prediction ---
     if st.button("🎯 Predict"):
         try:
             input_df = pd.DataFrame(student_data)
@@ -118,30 +124,24 @@ elif menu == "🎯 Prediction":
             input_df['attendance_x_assessment'] = input_df['attendance_rate_percent'] * input_df['assessment_ratio']
             input_df['study_x_homework'] = input_df['study_efficiency'] * input_df['homework_ratio']
 
-            # One-hot encode
             input_df = pd.get_dummies(input_df)
             for col in feature_names:
                 if col not in input_df.columns:
                     input_df[col] = 0
             input_df = input_df[feature_names]
 
-            # Predict and scale 10–100
             preds = model.predict(input_df)
-            preds = np.clip(preds, 10, 100)
-
-            # Risk classification
             risk_labels = ["⚠️ At-Risk" if score < 50 else "✅ Not At-Risk" for score in preds]
-
-            # Display Results
             results = pd.DataFrame({
                 "Student": [f"Student {i+1}" for i in range(len(preds))],
-                "Predicted Final Math Score (10–100)": preds,
+                "Predicted Final Math Score": preds,
                 "Risk Category": risk_labels
             })
 
+            import altair as alt
             tab1, tab2 = st.tabs(["🔢 Predictions", "📈 Visual Insights"])
             with tab1:
-                st.dataframe(results.style.format({"Predicted Final Math Score (10–100)": "{:.2f}"}))
+                st.dataframe(results.style.format({"Predicted Final Math Score": "{:.2f}"}))
             with tab2:
                 st.subheader("📊 Predicted Math Scores per Student")
                 chart = (
@@ -149,7 +149,7 @@ elif menu == "🎯 Prediction":
                     .mark_bar()
                     .encode(
                         x=alt.X("Student", sort=None, axis=alt.Axis(labelAngle=0, title="Students")),
-                        y=alt.Y("Predicted Final Math Score (10–100)", title="Score"),
+                        y=alt.Y("Predicted Final Math Score", title="Score"),
                         color=alt.Color("Risk Category", legend=alt.Legend(title="Risk Category"),
                                         scale=alt.Scale(domain=["⚠️ At-Risk", "✅ Not At-Risk"],
                                                         range=["#e74c3c", "#2ecc71"]))
@@ -185,7 +185,7 @@ elif menu == "ℹ️ About App":
     - Class assessment task (20%)  
     - Class participation (Low, Moderate, High) 
     """)
-    st.info("For inquiries or improvements, contact: **reginarobertson91@gmail.com**")
+    st.info("For inquiries or improvements, please contact the developer on reginarobertson91@gmail.com.")
 
 # ------------------------------
 # Footer
