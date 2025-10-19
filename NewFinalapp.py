@@ -1,170 +1,123 @@
-
-# OptFinalWorkStableApp.py
 import subprocess
 import sys
-
-# Runtime safety: try to ensure joblib is available (helps on some cloud builds)
-try:
-    import joblib
-except Exception:
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "joblib"], check=False)
-    import joblib
+subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "joblib"], check=False)
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+import joblib
 import os
 
+# ------------------------------
+# Page Config & Header
+# ------------------------------
 st.set_page_config(page_title="🎓 Student Math Score Predictor", page_icon="📘", layout="wide")
 
-# -------------------------------
-# Helper functions
-# -------------------------------
-def soft_global_scale(preds, target_min=10, target_max=100):
-    preds = np.array(preds).astype(float).copy()
-    p_min, p_max = preds.min(), preds.max()
-    if p_max > p_min:
-        preds = target_min + (preds - p_min) * (target_max - target_min) / (p_max - p_min)
-    else:
-        # all equal predictions -> map to midpoint
-        preds = np.full_like(preds, (target_min + target_max) / 2.0)
-    return preds
+# --- Sidebar Navigation ---
+menu = st.sidebar.radio(
+    "📂 Menu",
+    ["🏠 Home", "🎯 Prediction", "ℹ️ About App"]
+)
 
-# Fixed canonical feature list used during training (engineered + dummies)
-CANONICAL_FEATURES = [
-    'Class Assessment Task (20%)', 'Homework completion (20%)', 'Hours of studies per week', 'Attendance', 'Age',
-    'attendance_rate_percent', 'homework_ratio', 'assessment_ratio', 'study_efficiency',
-    'attendance_x_homework', 'attendance_x_assessment', 'study_x_homework',
-    'Class participation_High', 'Class participation_Moderate'
-]
+st.title("📘 Student Final Math Score Prediction - Ghanaian Junior High School")
 
-# -------------------------------
-# UI layout
-# -------------------------------
-menu = st.sidebar.radio("Menu", ["Home", "Prediction", "About"])
-st.title("📘 Student Final Math Score Prediction — Ghanaian Junior High School")
+# ------------------------------
+# Home Section
+# ------------------------------
+if menu == "🏠 Home":
+    st.markdown("<h2 style='text-align:center; color:skyblue;'>🌟 Welcome to the Student Final Math Score Prediction App 🌟</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:white;'>Let's explore how Machine Learning can help you understand and improve student performance.</p>", unsafe_allow_html=True)
+    
+    st.image("https://cdn-icons-png.flaticon.com/512/3135/3135755.png", width=180)
+    
+    st.markdown("""
+    ### 💡 What You Can Do Here
+    - Predict final math scores using real student data  
+    - Identify at-risk students early  
+    - Explore how various academic factors influence outcomes  
+    - Download results for further analysis  
+    """)
 
-if menu == "Home":
-    st.markdown("### Welcome")
-    st.markdown("Use the **Prediction** page to enter student details and get a predicted final math score (displayed on a 10–100 scale).")
-    st.info("Make sure `catboost_model.pkl` and (optionally) `scaler.pkl` are in the app folder. If you use a dataset for defaults, put it in the same folder too.")
+    st.success("👉 Use the sidebar to go to **🎯 Prediction** or **ℹ️ About App** sections.")
 
-elif menu == "Prediction":
-    st.sidebar.header("Settings")
-    mode = st.sidebar.radio("Input mode", ["One Variable per Student", "All Variables per Student"])
-    n_students = st.sidebar.number_input("Number of students", min_value=1, max_value=100, value=1, step=1)
+# ------------------------------
+# Prediction Section
+# ------------------------------
+elif menu == "🎯 Prediction":
+    st.sidebar.header("🧮 Prediction Settings")
+    mode = st.sidebar.radio("Select Input Mode", ["One Variable per Student", "All Variables per Student"])
+    n_students = st.sidebar.number_input("Input the Number of Students you want to predict for", min_value=1, max_value=100, value=1, step=1)
 
-    # --- Try to load model and optional scaler / dataset ---
-    model = None
-    scaler = None
-    df_defaults = None
-
-    # Load model
+    # --- Load model & data ---
     try:
-        model = joblib.load("optimized_catboost_model.pkl")
+        model = joblib.load('optimized_catboost_model.pkl')
+        df = pd.read_excel('NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx')
     except FileNotFoundError:
-        st.error("Model file 'optimized_catboost_model.pkl' not found in app directory. Upload it and refresh.")
-        st.stop()
-    except Exception as e:
-        st.error(f"Failed to load model: {e}")
+        st.error("❌ Missing files. Ensure both 'optimized_catboost_model.pkl' and 'NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx' exist.")
         st.stop()
 
-    # Try optional scaler
-    if os.path.exists("scaler.pkl"):
-        try:
-            scaler = joblib.load("scaler.pkl")
-        except Exception:
-            scaler = None
-            st.warning("Found 'scaler.pkl' but failed to load it. Predictions will proceed without scaling.")
+    # --- Safe feature list handling ---
+    try:
+        feature_names = getattr(model, "feature_names_", None)
+        if not feature_names or len(feature_names) == 0:
+            feature_names = df.drop(columns=["Final Math Score", "Final Math Score 100%"], errors="ignore").columns.tolist()
+    except Exception:
+        feature_names = df.drop(columns=["Final Math Score", "Final Math Score 100%"], errors="ignore").columns.tolist()
 
-    # Try optional dataset for defaults (not required)
-    if os.path.exists("NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx"):
-        try:
-            df_defaults = pd.read_excel("NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx")
-        except Exception:
-            df_defaults = None
-
-    # Try to get feature names from the model, else use canonical
-    feature_names_from_model = getattr(model, "feature_names_", None)
-    if feature_names_from_model and len(feature_names_from_model) >= 1:
-        FEATURE_ORDER = list(feature_names_from_model)
-    else:
-        # fallback to canonical expected features
-        FEATURE_ORDER = list(CANONICAL_FEATURES)
-        st.info("Model feature names not found — using canonical feature list for alignment.")
-
-    # UI: collect student inputs
-    st.header("Enter student details")
+    # --- Feature Mapping ---
     features = {
         "1": "Age",
         "2": "Hours of studies per week",
         "3": "Attendance",
         "4": "Homework completion (20%)",
         "5": "Class Assessment Task (20%)",
-        "6": "Class participation (Low, Moderate, High)"
+        "6": "Class participation"
     }
 
-    def get_default(col):
-        if df_defaults is None:
-            # reasonable defaults
-            defaults = {
-                "Age": 14,
-                "Hours of studies per week": 5.0,
-                "Attendance": 60,
-                "Homework completion (20%)": 15.0,
-                "Class Assessment Task (20%)": 15.0,
-                "Class participation": "Moderate"
-            }
-            return defaults.get(col)
-        else:
-            if col in df_defaults.columns:
-                if df_defaults[col].dtype == "object":
-                    return df_defaults[col].mode().iloc[0]
-                else:
-                    return float(df_defaults[col].mean())
+    # --- Data Collection Function ---
+    def collect_student_data(n_students, all_vars=False):
+        students = []
+        for i in range(n_students):
+            st.subheader(f"🧑‍🎓 Student {i+1}")
+            student = {}
+
+            if not all_vars:
+                selected_feature = st.selectbox(f"Select feature for Student {i+1}", list(features.values()), key=f"feature_{i}")
+
+                # Set defaults using mean/mode
+                student = {col: (df[col].mode()[0] if df[col].dtype == 'object' else df[col].mean()) for col in features.values()}
+
+                if selected_feature == "Class participation":
+                    student[selected_feature] = st.selectbox("Class participation", ["Low", "Moderate", "High"], key=f"part_{i}")
+                elif selected_feature == "Age":
+                    student[selected_feature] = st.number_input("Age", min_value=5, max_value=25, value=14, step=1, key=f"age_{i}")
+                elif selected_feature in ["Homework completion (20%)", "Class Assessment Task (20%)"]:
+                    student[selected_feature] = st.number_input(f"{selected_feature} (0–20)", min_value=0.0, max_value=20.0, value=15.0, step=0.1, key=f"{selected_feature}_{i}")
+                elif selected_feature == "Attendance":
+                    student[selected_feature] = st.number_input("Attendance (10 and above)", min_value=10, value=60, step=1, key=f"att_{i}")
+                elif selected_feature == "Hours of studies per week":
+                    student[selected_feature] = st.number_input("Hours of studies per week", min_value=0.0, value=5.0, step=0.1, key=f"hours_{i}")
+            
             else:
-                return None
+                student["Age"] = st.number_input("Age", min_value=5, max_value=25, value=14, step=1, key=f"age_{i}")
+                student["Hours of studies per week"] = st.number_input("Hours of studies per week", min_value=0.0, value=5.0, step=0.1, key=f"hours_{i}")
+                student["Attendance"] = st.number_input("Attendance (10 and above)", min_value=10, value=60, step=1, key=f"att_{i}")
+                student["Homework completion (20%)"] = st.number_input("Homework completion (0–20)", min_value=0.0, max_value=20.0, value=15.0, step=0.1, key=f"home_{i}")
+                student["Class Assessment Task (20%)"] = st.number_input("Class Assessment Task (0–20)", min_value=0.0, max_value=20.0, value=15.0, step=0.1, key=f"assess_{i}")
+                student["Class participation"] = st.selectbox("Class participation", ["Low", "Moderate", "High"], key=f"part_{i}")
+            
+            students.append(student)
+        return students
 
-    students_list = []
-    for i in range(int(n_students)):
-        st.subheader(f"Student {i+1}")
-        student = {}
-        if mode == "One Variable per Student":
-            chosen = st.selectbox(f"Select variable to set for Student {i+1}", list(features.values()), key=f"choice_{i}")
-            # initialize with defaults
-            for col in features.values():
-                student[col] = get_default(col)
-            if chosen == "Class participation":
-                student[chosen] = st.selectbox(f"Class participation (Student {i+1})", ["Low", "Moderate", "High"], key=f"part_{i}")
-            elif chosen == "Age":
-                student["Age"] = st.number_input(f"Age (Student {i+1})", min_value=5, max_value=25, value=int(get_default("Age")), key=f"age_{i}")
-            elif chosen in ["Homework completion (20%)", "Class Assessment Task (20%)"]:
-                student[chosen] = st.number_input(f"{chosen} (0–20) (Student {i+1})", min_value=0.0, max_value=20.0, value=float(get_default(chosen)), step=0.1, key=f"{chosen}_{i}")
-            elif chosen == "Attendance":
-                student["Attendance"] = st.number_input(f"Attendance (10+) (Student {i+1})", min_value=10, max_value=100, value=int(get_default("Attendance") or 60), key=f"att_{i}")
-            elif chosen == "Hours of studies per week":
-                student["Hours of studies per week"] = st.number_input(f"Hours of studies per week (Student {i+1})", min_value=0.0, value=float(get_default("Hours of studies per week") or 5.0), step=0.1, key=f"hours_{i}")
-        else:
-            # all vars
-            student["Age"] = st.number_input(f"Age (Student {i+1})", min_value=5, max_value=25, value=int(get_default("Age") or 14), key=f"age_all_{i}")
-            student["Hours of studies per week"] = st.number_input(f"Hours of studies per week (Student {i+1})", min_value=0.0, value=float(get_default("Hours of studies per week") or 5.0), step=0.1, key=f"hours_all_{i}")
-            student["Attendance"] = st.number_input(f"Attendance (10+) (Student {i+1})", min_value=10, max_value=100, value=int(get_default("Attendance") or 60), key=f"att_all_{i}")
-            student["Homework completion (20%)"] = st.number_input(f"Homework completion (0–20) (Student {i+1})", min_value=0.0, max_value=20.0, value=float(get_default("Homework completion (20%)") or 15.0), step=0.1, key=f"home_all_{i}")
-            student["Class Assessment Task (20%)"] = st.number_input(f"Class Assessment Task (0–20) (Student {i+1})", min_value=0.0, max_value=20.0, value=float(get_default("Class Assessment Task (20%)") or 15.0), step=0.1, key=f"assess_all_{i}")
-            student["Class participation"] = st.selectbox(f"Class participation (Student {i+1})", ["Low", "Moderate", "High"], index=1, key=f"part_all_{i}")
-        students_list.append(student)
+    # --- Collect Data ---
+    student_data = collect_student_data(int(n_students), all_vars=(mode == "All Variables per Student"))
 
-    # Predict button
-    if st.button("Predict"):
+    # --- Prediction ---
+    if st.button("🎯 Predict"):
         try:
-            input_df = pd.DataFrame(students_list)
+            input_df = pd.DataFrame(student_data)
 
-            # Ensure required columns exist (fill missing with defaults)
-            for c in ["Age", "Hours of studies per week", "Attendance", "Homework completion (20%)", "Class Assessment Task (20%)", "Class participation"]:
-                if c not in input_df.columns:
-                    input_df[c] = get_default(c)
-
-            # Feature engineering
+            # --- Feature Engineering ---
             input_df['attendance_rate_percent'] = input_df['Attendance'] / 71
             input_df['homework_ratio'] = input_df['Homework completion (20%)'] / 20
             input_df['assessment_ratio'] = input_df['Class Assessment Task (20%)'] / 20
@@ -173,80 +126,78 @@ elif menu == "Prediction":
             input_df['attendance_x_assessment'] = input_df['attendance_rate_percent'] * input_df['assessment_ratio']
             input_df['study_x_homework'] = input_df['study_efficiency'] * input_df['homework_ratio']
 
-            # One-hot encode participation (ensure columns exist)
+            # One-hot encode categorical variable
             input_df = pd.get_dummies(input_df)
-            # Guarantee presence of the participation dummies
-            for col in ["Class participation_High", "Class participation_Moderate"]:
+            for col in feature_names:
                 if col not in input_df.columns:
                     input_df[col] = 0
+            input_df = input_df[feature_names]
 
-            # Align to FEATURE_ORDER (fallback)
-            for col in FEATURE_ORDER:
-                if col not in input_df.columns:
-                    input_df[col] = 0
-
-            # Select columns in correct order
-            input_aligned = input_df[FEATURE_ORDER].copy()
-
-            # Apply scaler if available
-            if scaler is not None:
-                try:
-                    input_transformed = scaler.transform(input_aligned)
-                except Exception:
-                    st.warning("Scaler exists but failed to transform inputs — proceeding without scaler.")
-                    input_transformed = input_aligned.values
-            else:
-                input_transformed = input_aligned.values
-
-            # Predict raw
-            raw_preds = model.predict(input_transformed).astype(float)
-
-            # Displayed prediction: rescaled 10-100 for UI
-            displayed_preds = soft_global_scale(raw_preds, target_min=10, target_max=100)
-
-            # Prepare results (only show displayed score to user)
+            preds = model.predict(input_df)
+            risk_labels = ["⚠️ At-Risk" if score < 50 else "✅ Not At-Risk" for score in preds]
+            
             results = pd.DataFrame({
-                "Student": [f"Student {i+1}" for i in range(len(displayed_preds))],
-                "Predicted Final Math Score (10–100)": np.round(displayed_preds, 2),
+                "Student": [f"Student {i+1}" for i in range(len(preds))],
+                "Predicted Final Math Score": preds,
+                "Risk Category": risk_labels
             })
 
-            # Optionally include risk based on raw prediction internally (but display only the displayed score)
-            risk = ["⚠️ At-Risk" if r < 50 else "✅ Not At-Risk" for r in raw_preds]
-            results["Risk Category"] = risk
-
-            st.success("Prediction complete.")
-            st.dataframe(results[["Student", "Predicted Final Math Score (10–100)"]].style.format({"Predicted Final Math Score (10–100)": "{:.2f}"}))
-
-            # Visual
-            try:
-                import altair as alt
+            # --- Results Display ---
+            import altair as alt
+            tab1, tab2 = st.tabs(["🔢 Predictions", "📈 Visual Insights"])
+            
+            with tab1:
+                st.dataframe(results.style.format({"Predicted Final Math Score": "{:.2f}"}))
+            
+            with tab2:
+                st.subheader("📊 Predicted Math Scores per Student")
                 chart = (
                     alt.Chart(results)
                     .mark_bar()
                     .encode(
-                        x=alt.X("Student", sort=None),
-                        y=alt.Y("Predicted Final Math Score (10–100)"),
-                        color=alt.Color("Risk Category", scale=alt.Scale(domain=["⚠️ At-Risk", "✅ Not At-Risk"], range=["#e74c3c", "#2ecc71"]))
+                        x=alt.X("Student", sort=None, axis=alt.Axis(labelAngle=0, title="Students")),
+                        y=alt.Y("Predicted Final Math Score", title="Score"),
+                        color=alt.Color("Risk Category", legend=alt.Legend(title="Risk Category"),
+                                        scale=alt.Scale(domain=["⚠️ At-Risk", "✅ Not At-Risk"],
+                                                        range=["#e74c3c", "#2ecc71"]))
                     )
-                    .properties(height=400, width="container")
+                    .properties(width=600, height=400)
                 )
                 st.altair_chart(chart, use_container_width=True)
-            except Exception:
-                pass
 
-            # Download
+            avg_score = np.mean(preds)
+            at_risk = np.sum(preds < 50)
+            if at_risk > 0:
+                message = "🧩 One student needs support." if at_risk == 1 else f"🧩 {at_risk} students need support."
+                st.info(message)
+            else:
+                st.success("✅ All students predicted to be on track!")
+
             csv = results.to_csv(index=False).encode("utf-8")
-            st.download_button("Download results (CSV)", csv, "prediction_results.csv", "text/csv")
+            st.download_button("📥 Download Results as CSV", csv, "prediction_results.csv", "text/csv")
 
         except Exception as e:
-            st.exception(f"Prediction failed: {e}")
+            st.error(f"Prediction failed: {str(e)}")
 
-elif menu == "About":
-    st.header("About")
+# ------------------------------
+# About Section
+# ------------------------------
+elif menu == "ℹ️ About App":
+    st.header("ℹ️ About This App")
     st.write("""
-    CatBoost-based student math score predictor.
-    Developer: Regina Robertson (2025)
+    This app was developed as part of a **Machine Learning Capstone Project** by **Regina Robertson (2025)**.
+    It leverages the **CatBoost algorithm** to predict math performance for Ghanaian Junior High School students based on:
+    - 👩‍🎓 Age  
+    - ⏱ Hours of study per week  
+    - 🏫 Attendance  
+    - 📝 Homework completion (20%)  
+    - 🧩 Class assessment task (20%)  
+    - 🎤 Class participation (Low, Moderate, High) 
     """)
+    st.info("📧 For inquiries or improvements, please contact **reginarobertson91@gmail.com**.")
 
+# ------------------------------
+# Footer
+# ------------------------------
 st.markdown("---")
-st.caption("If you trained the model locally, consider saving the scaler (scaler.pkl) and the model with feature names to avoid any alignment warnings.")
+st.markdown("<p style='text-align:center;color:gray;'>Developed by <b>Regina Robertson</b> | 🎓 Capstone Project © 2025</p>", unsafe_allow_html=True)
