@@ -15,18 +15,62 @@ st.set_page_config(page_title="ðŸŽ“ Student Math Score Predictor", page_icon="ðŸ
 
 st.markdown("""
     <style>
+        /* Main app background */
         [data-testid="stAppViewContainer"] {
             background-color: #0E1117;
-            color: white;
+            color: #FFFFFF;
         }
+
+        /* Sidebar background */
         [data-testid="stSidebar"] {
-            background-color: #262730;
+            background-color: #1E1E1E;
+            color: #FFFFFF;
         }
+
+        /* Header transparency */
         [data-testid="stHeader"] {
-            background-color: rgba(0,0,0,0);
+            background-color: rgba(0, 0, 0, 0);
         }
-        .stMarkdown, .stTextInput, .stNumberInput, .stSelectbox, .stDataFrame {
-            color: white !important;
+
+        /* General text elements */
+        h1, h2, h3, h4, h5, h6, p, label, span, div, li {
+            color: #FFFFFF !important;
+        }
+
+        /* Input and selection widgets */
+        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div {
+            background-color: #2B2B2B;
+            color: #FFFFFF !important;
+            border: 1px solid #555555;
+        }
+
+        /* Dataframe table text */
+        .stDataFrame, .stDataFrame table, .stDataFrame tbody, .stDataFrame tr, .stDataFrame td, .stDataFrame th {
+            color: #FFFFFF !important;
+            background-color: #1E1E1E !important;
+        }
+
+        /* Buttons */
+        div.stButton > button {
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 8px;
+            border: none;
+        }
+        div.stButton > button:hover {
+            background-color: #45A049;
+        }
+
+        /* Tabs */
+        [data-baseweb="tab-list"] {
+            background-color: #1E1E1E;
+            border-radius: 10px;
+        }
+        [data-baseweb="tab"] {
+            color: #FFFFFF !important;
+        }
+        [data-baseweb="tab"]:hover {
+            background-color: #2C2C2C;
         }
     </style>
 """, unsafe_allow_html=True)
