@@ -57,13 +57,13 @@ elif menu == "🎯 Prediction":
         st.error("❌ Model or data file not found. Ensure both 'catboost_model.pkl' and 'NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx' exist in this directory.")
         st.stop()
     try:
-        feature_names = model.feature_names_
+    feature_names = model.feature_names_
     if not feature_names or feature_names is None:
         st.warning("⚠️ Model feature names not found. Using dataset column names instead.")
         feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
-    except Exception:
-        st.warning("⚠️ Could not extract feature names from model. Using dataset columns instead.")
-        feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
+except Exception:
+    st.warning("⚠️ Could not extract feature names from model. Using dataset columns instead.")
+    feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
 
 
     # --- Feature Mapping ---
