@@ -50,6 +50,7 @@ elif menu == "🎯 Prediction":
     n_students = st.sidebar.number_input("Input the Number of Students you want to predict for", min_value=1, max_value=100, value=1, step=1)
 
     # --- Load model & data ---
+    
     try:
         model = joblib.load('catboost_model.pkl')
         df = pd.read_excel('NEW DATA OF STUDENTS OF VRA JHS NO. 2.xlsx')
@@ -58,12 +59,10 @@ elif menu == "🎯 Prediction":
         st.stop()
 
     try:
-        feature_names = model.feature_names_
-        if not feature_names or feature_names is None:
-            st.warning("⚠️ Model feature names not found. Using dataset column names instead.")
+        feature_names = getattr(model, "feature_names_", None)
+        if not feature_names:
             feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
     except Exception:
-        st.warning("⚠️ Could not extract feature names from model. Using dataset columns instead.")
         feature_names = df.drop(columns=["Final Math Score"], errors="ignore").columns.tolist()
 
     # --- Feature Mapping ---
