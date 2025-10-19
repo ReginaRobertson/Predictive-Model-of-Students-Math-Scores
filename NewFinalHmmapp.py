@@ -206,7 +206,7 @@ elif menu == "ℹ️ About App":
     - 🏫 Attendance  
     - 📝 Homework completion (20%)  
     - 🧩 Class assessment task (20%)  
-    - 🎤 Class participation (Low, Moderate, High) 
+    - 🎤 Class participation 
     """)
     st.info("📧 For inquiries or improvements, please contact **reginarobertson91@gmail.com**.")
 
