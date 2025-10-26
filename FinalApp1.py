@@ -1,4 +1,3 @@
-
 import subprocess
 import sys
 subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "joblib"], check=False)
@@ -12,15 +11,22 @@ import os
 # ------------------------------
 # 🧩 Compatibility Patch (Altair + Pandas + Streamlit)
 # ------------------------------
-import typing
-from typing import TypedDict
+try:
+    import typing
+    from typing import TypedDict
 
-# Fix for: _TypedDictMeta.new() got an unexpected keyword argument 'closed'
-if not hasattr(TypedDict, "__annotations__"):
-    def _patched_new(cls, *args, **kwargs):
-        kwargs.pop("closed", None)  # Safely ignore unsupported 'closed' kwarg
-        return typing._TypedDictMeta.__new__(cls, *args, **kwargs)
-    typing._TypedDictMeta.__new__ = _patched_new
+    # Patch only if the current Python version or Altair raises the issue
+    if hasattr(typing, "_TypedDictMeta"):
+        orig_new = typing._TypedDictMeta.__new__
+
+        def safe_new(cls, name, bases, ns, total=True, **kwargs):
+            # Remove 'closed' kwarg that causes issues in Streamlit Cloud
+            kwargs.pop("closed", None)
+            return orig_new(cls, name, bases, ns, total=total, **kwargs)
+
+        typing._TypedDictMeta.__new__ = safe_new
+except Exception as e:
+    print("Typing patch skipped:", e)
 
 
 # ------------------------------
@@ -99,7 +105,6 @@ elif menu == "🎯 Prediction":
             if not all_vars:
                 selected_feature = st.selectbox(f"Select feature for Student {i+1}", list(features.values()), key=f"feature_{i}")
 
-                # Set defaults using mean/mode
                 student = {col: (df[col].mode()[0] if df[col].dtype == 'object' else df[col].mean()) for col in features.values()}
 
                 if selected_feature == "Class participation":
@@ -124,7 +129,6 @@ elif menu == "🎯 Prediction":
             students.append(student)
         return students
 
-    # --- Collect Data ---
     student_data = collect_student_data(int(n_students), all_vars=(mode == "All Variables per Student"))
 
     # --- Prediction ---
@@ -141,7 +145,6 @@ elif menu == "🎯 Prediction":
             input_df['attendance_x_assessment'] = input_df['attendance_rate_percent'] * input_df['assessment_ratio']
             input_df['study_x_homework'] = input_df['study_efficiency'] * input_df['homework_ratio']
 
-            # One-hot encode categorical variable
             input_df = pd.get_dummies(input_df)
             for col in feature_names:
                 if col not in input_df.columns:
@@ -215,4 +218,4 @@ elif menu == "ℹ️ About App":
 # Footer
 # ------------------------------
 st.markdown("---")
-st.markdown("<p style='text-align:center;color:gray;'>Developed by <b>Regina Robertson</b> | 🎓 Capstone Project © 2025</p>", unsafe_allow_html=True))
+st.markdown("<p style='text-align:center;color:gray;'>Developed by <b>Regina Robertson</b> | 🎓 Capstone Project © 2025</p>", unsafe_allow_html=True)
